@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VidCoin – Watch & Earn</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --gold: #FFD700; --gold2: #FFA500; --bg: #0a0a0f;
+    --card: #13131a; --accent: #00f0a0; --danger: #ff3b5c;
+    --text: #f0f0f0; --muted: #888;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; height:100vh; overflow:hidden; display:flex; flex-direction:column; }
+
+  /* AUTH SCREEN */
+  .auth-screen { position:fixed; inset:0; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999; padding:30px; }
+  .auth-logo { font-family:'Bebas Neue',sans-serif; font-size:52px; background:linear-gradient(135deg,var(--gold),var(--gold2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; letter-spacing:4px; margin-bottom:8px; }
+  .auth-sub { color:var(--muted); font-size:14px; margin-bottom:40px; text-align:center; }
+  .auth-box { width:100%; max-width:360px; background:var(--card); border-radius:20px; padding:28px; border:1px solid rgba(255,215,0,0.15); }
+  .auth-tabs { display:flex; margin-bottom:24px; background:rgba(255,255,255,0.05); border-radius:12px; padding:4px; }
+  .auth-tab { flex:1; padding:10px; text-align:center; border-radius:10px; cursor:pointer; font-weight:600; font-size:14px; color:var(--muted); transition:all 0.2s; }
+  .auth-tab.active { background:linear-gradient(135deg,var(--gold),var(--gold2)); color:#000; }
+  .auth-input { width:100%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:14px 16px; color:#fff; font-family:'DM Sans',sans-serif; font-size:14px; outline:none; margin-bottom:12px; }
+  .auth-input:focus { border-color:rgba(255,215,0,0.5); }
+  .auth-btn { width:100%; padding:14px; background:linear-gradient(135deg,var(--gold),var(--gold2)); color:#000; font-weight:700; font-size:15px; border:none; border-radius:14px; cursor:pointer; transition:all 0.2s; margin-top:4px; }
+  .auth-btn:hover { transform:scale(1.02); }
+  .auth-btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
+  .auth-error { color:var(--danger); font-size:13px; text-align:center; margin-top:10px; min-height:18px; }
+  .auth-hidden { display:none; }
+
+  /* TOPBAR */
+  .topbar { display:flex; justify-content:space-between; align-items:center; padding:12px 20px; background:rgba(10,10,15,0.97); border-bottom:1px solid rgba(255,215,0,0.15); z-index:100; }
+  .logo { font-family:'Bebas Neue',sans-serif; font-size:26px; background:linear-gradient(135deg,var(--gold),var(--gold2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; letter-spacing:2px; }
+  .top-right { display:flex; align-items:center; gap:10px; }
+  .coin-display { display:flex; align-items:center; gap:8px; background:rgba(255,215,0,0.1); border:1px solid rgba(255,215,0,0.3); border-radius:30px; padding:6px 14px; cursor:pointer; }
+  .coin-icon { font-size:18px; animation:spin 4s linear infinite; }
+  @keyframes spin { 0%,100%{transform:rotateY(0deg)} 50%{transform:rotateY(180deg)} }
+  .coin-count { font-family:'Bebas Neue',sans-serif; font-size:20px; color:var(--gold); }
+  .coin-count.bump { transform:scale(1.3); color:#fff; transition:all 0.2s; }
+  .logout-btn { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; border-radius:20px; padding:7px 14px; font-size:12px; font-weight:600; cursor:pointer; }
+
+  /* FEED */
+  .feed { flex:1; overflow-y:scroll; scroll-snap-type:y mandatory; -webkit-overflow-scrolling:touch; }
+  .feed::-webkit-scrollbar { display:none; }
+
+  /* LOADING / EMPTY */
+  .center-state { height:calc(100vh - 112px); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; padding:30px; scroll-snap-align:start; }
+  .state-icon { font-size:64px; animation:bounce 2s ease-in-out infinite; }
+  @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+  .state-title { font-family:'Bebas Neue',sans-serif; font-size:28px; color:var(--gold); }
+  .state-sub { color:var(--muted); font-size:14px; max-width:250px; line-height:1.5; }
+  .upload-big-btn { background:linear-gradient(135deg,var(--gold),var(--gold2)); color:#000; font-weight:700; font-size:15px; border:none; border-radius:18px; padding:14px 28px; cursor:pointer; }
+
+  /* VIDEO CARD */
+  .video-card { height:calc(100vh - 112px); scroll-snap-align:start; position:relative; overflow:hidden; background:#000; }
+  .video-card video { width:100%; height:100%; object-fit:cover; display:block; }
+  .tap-overlay { position:absolute; inset:0; z-index:5; cursor:pointer; }
+  .pause-flash { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) scale(0); z-index:10; font-size:36px; background:rgba(0,0,0,0.5); border-radius:50%; width:72px; height:72px; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(10px); transition:transform 0.15s,opacity 0.3s; opacity:0; pointer-events:none; }
+  .pause-flash.show { transform:translate(-50%,-50%) scale(1); opacity:1; }
+  .pause-flash.hide { transform:translate(-50%,-50%) scale(1.3); opacity:0; }
+  .earn-badge { position:absolute; top:16px; right:15px; background:rgba(255,215,0,0.15); border:1px solid rgba(255,215,0,0.5); border-radius:12px; padding:5px 12px; font-size:12px; font-weight:700; color:var(--gold); backdrop-filter:blur(10px); z-index:10; }
+  .coin-toast { position:absolute; top:20px; left:50%; transform:translateX(-50%) translateY(-60px); background:rgba(255,215,0,0.15); border:1px solid var(--gold); color:var(--gold); border-radius:30px; padding:8px 20px; font-weight:700; font-size:14px; transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1); white-space:nowrap; backdrop-filter:blur(10px); z-index:20; }
+  .coin-toast.show { transform:translateX(-50%) translateY(0); }
+  .video-info { position:absolute; bottom:0; left:0; right:70px; padding:20px; background:linear-gradient(transparent,rgba(0,0,0,0.85)); z-index:10; }
+  .username { font-weight:700; font-size:15px; margin-bottom:5px; }
+  .caption { font-size:13px; color:#ddd; line-height:1.4; }
+  .watch-bar { position:absolute; bottom:0; left:0; height:3px; background:linear-gradient(90deg,var(--gold),var(--gold2)); width:0%; box-shadow:0 0 8px var(--gold); z-index:15; }
+  .actions { position:absolute; right:12px; bottom:80px; display:flex; flex-direction:column; gap:18px; align-items:center; z-index:10; }
+  .action-btn { display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; }
+  .action-icon { width:46px; height:46px; background:rgba(255,255,255,0.1); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:20px; backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.2); transition:all 0.2s; }
+  .action-icon:active { transform:scale(0.9); }
+  .action-label { font-size:11px; color:#ddd; }
+
+  /* BOTTOM NAV */
+  .bottom-nav { display:flex; background:rgba(10,10,15,0.97); border-top:1px solid rgba(255,255,255,0.08); padding:8px 0; }
+  .nav-item { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px; cursor:pointer; font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+  .nav-item.active { color:var(--gold); }
+  .nav-icon { font-size:22px; }
+
+  /* FAB */
+  .fab { position:fixed; bottom:76px; right:18px; width:52px; height:52px; background:linear-gradient(135deg,var(--gold),var(--gold2)); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:700; cursor:pointer; box-shadow:0 4px 20px rgba(255,215,0,0.5); z-index:50; border:none; color:#000; }
+
+  /* MODALS */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); display:flex; align-items:flex-end; justify-content:center; z-index:200; opacity:0; pointer-events:none; transition:opacity 0.3s; backdrop-filter:blur(5px); }
+  .modal-overlay.open { opacity:1; pointer-events:all; }
+  .modal { background:var(--card); border-radius:24px 24px 0 0; padding:28px 24px; width:100%; max-width:480px; border:1px solid rgba(255,215,0,0.2); border-bottom:none; transform:translateY(100%); transition:transform 0.4s cubic-bezier(0.34,1.2,0.64,1); position:relative; max-height:90vh; overflow-y:auto; }
+  .modal-overlay.open .modal { transform:translateY(0); }
+  .modal-handle { width:40px; height:4px; background:#333; border-radius:2px; margin:0 auto 20px; }
+  .modal-title { font-family:'Bebas Neue',sans-serif; font-size:26px; color:var(--gold); margin-bottom:18px; letter-spacing:1px; }
+  .close-modal { position:absolute; top:14px; right:18px; background:rgba(255,255,255,0.1); border:none; color:#fff; width:30px; height:30px; border-radius:50%; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; }
+
+  /* WALLET */
+  .balance-card { background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,165,0,0.05)); border:1px solid rgba(255,215,0,0.3); border-radius:16px; padding:20px; margin-bottom:18px; text-align:center; }
+  .balance-coins { font-family:'Bebas Neue',sans-serif; font-size:48px; color:var(--gold); line-height:1; }
+  .balance-usd { color:var(--muted); font-size:14px; margin-top:4px; }
+  .balance-label { font-size:11px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:1px; }
+  .progress-section { margin-bottom:18px; }
+  .progress-label { display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-bottom:8px; }
+  .progress-track { background:#222; border-radius:10px; height:10px; overflow:hidden; }
+  .progress-fill { height:100%; background:linear-gradient(90deg,var(--gold),var(--gold2)); border-radius:10px; transition:width 0.5s ease; box-shadow:0 0 10px var(--gold); }
+  .progress-milestone { color:var(--accent); font-weight:700; font-size:13px; margin-top:8px; text-align:center; }
+  .rate-info { background:rgba(255,255,255,0.04); border-radius:12px; padding:14px; margin-bottom:18px; display:flex; gap:12px; }
+  .rate-item { flex:1; text-align:center; }
+  .rate-val { font-family:'Bebas Neue',sans-serif; font-size:20px; color:var(--accent); }
+  .rate-lbl { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+  .withdraw-full-btn { width:100%; padding:15px; background:linear-gradient(135deg,var(--gold),var(--gold2)); color:#000; font-family:'DM Sans',sans-serif; font-weight:700; font-size:15px; border:none; border-radius:14px; cursor:pointer; transition:all 0.2s; }
+  .withdraw-full-btn:disabled { opacity:0.4; cursor:not-allowed; }
+  .withdraw-note { font-size:12px; color:var(--muted); text-align:center; margin-top:10px; }
+
+  /* UPLOAD */
+  .drop-zone { border:2px dashed rgba(255,215,0,0.4); border-radius:16px; padding:32px 20px; text-align:center; cursor:pointer; transition:all 0.3s; margin-bottom:14px; }
+  .drop-zone:hover { border-color:var(--gold); background:rgba(255,215,0,0.05); }
+  .drop-icon { font-size:44px; margin-bottom:8px; }
+  .drop-title { font-family:'Bebas Neue',sans-serif; font-size:20px; color:var(--gold); margin-bottom:4px; }
+  .drop-sub { color:var(--muted); font-size:13px; }
+  .caption-input { width:100%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:12px; padding:12px 16px; color:#fff; font-family:'DM Sans',sans-serif; font-size:14px; margin-bottom:12px; outline:none; resize:none; }
+  .caption-input:focus { border-color:rgba(255,215,0,0.5); }
+  .post-btn { width:100%; padding:14px; background:linear-gradient(135deg,var(--gold),var(--gold2)); color:#000; font-weight:700; font-size:15px; border:none; border-radius:14px; cursor:pointer; transition:all 0.2s; }
+  .post-btn:disabled { opacity:0.4; cursor:not-allowed; }
+  #fileInput { display:none; }
+  .upload-progress { background:rgba(255,255,255,0.06); border-radius:10px; height:8px; overflow:hidden; margin-bottom:12px; display:none; }
+  .upload-progress-fill { height:100%; background:linear-gradient(90deg,var(--gold),var(--gold2)); border-radius:10px; transition:width 0.3s; width:0%; }
+
+  /* FLOAT COIN */
+  .float-coin { position:fixed; font-size:22px; pointer-events:none; z-index:999; animation:floatUp 1.2s ease-out forwards; }
+  @keyframes floatUp { 0%{transform:translateY(0) scale(1);opacity:1} 100%{transform:translateY(-100px) scale(0.5);opacity:0} }
+
+  .spinner { width:36px; height:36px; border:3px solid rgba(255,215,0,0.2); border-top-color:var(--gold); border-radius:50%; animation:rotate 0.8s linear infinite; margin:0 auto; }
+  @keyframes rotate { to{transform:rotate(360deg)} }
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div class="auth-screen" id="authScreen">
+  <div class="auth-logo">VidCoin</div>
+  <div class="auth-sub">Watch videos. Earn coins. Cash out. 💰</div>
+  <div class="auth-box">
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="switchTab('login')">Login</div>
+      <div class="auth-tab" onclick="switchTab('signup')">Sign Up</div>
+    </div>
+    <input class="auth-input" id="authEmail" type="email" placeholder="Email address">
+    <input class="auth-input" id="authPass" type="password" placeholder="Password">
+    <input class="auth-input auth-hidden" id="authName" type="text" placeholder="Your username">
+    <button class="auth-btn" id="authBtn" onclick="doAuth()">Login</button>
+    <div class="auth-error" id="authError"></div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="topbar">
+  <div class="logo">VidCoin</div>
+  <div class="top-right">
+    <div class="coin-display" onclick="openWallet()">
+      <span class="coin-icon">🪙</span>
+      <span class="coin-count" id="coinCount">0</span>
+    </div>
+    <button class="logout-btn" onclick="logout()">Logout</button>
+  </div>
+</div>
+
+<div class="feed" id="feed">
+  <div class="center-state" id="loadingState">
+    <div class="spinner"></div>
+    <div class="state-sub">Loading videos...</div>
+  </div>
+</div>
+
+<button class="fab" onclick="openUpload()">＋</button>
+
+<div class="bottom-nav">
+  <div class="nav-item active"><span class="nav-icon">🏠</span>Home</div>
+  <div class="nav-item"><span class="nav-icon">🔍</span>Explore</div>
+  <div class="nav-item" onclick="openUpload()"><span class="nav-icon">📤</span>Upload</div>
+  <div class="nav-item"><span class="nav-icon">🔔</span>Inbox</div>
+  <div class="nav-item" onclick="openWallet()"><span class="nav-icon">🪙</span>Wallet</div>
+</div>
+
+<!-- WALLET MODAL -->
+<div class="modal-overlay" id="walletOverlay" onclick="closeOutside(event,'walletOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <button class="close-modal" onclick="closeWallet()">×</button>
+    <div class="modal-title">💰 My Wallet</div>
+    <div class="balance-card">
+      <div class="balance-label">Total Coins</div>
+      <div class="balance-coins" id="modalCoins">0</div>
+      <div class="balance-usd" id="modalUsd">≈ $0.00 USD</div>
+    </div>
+    <div class="progress-section">
+      <div class="progress-label"><span>Withdrawal Progress</span><span id="progressLabel">0 / 6,667</span></div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <div class="progress-milestone" id="progressMilestone">🎯 Earn 6,667 coins to unlock $500</div>
+    </div>
+    <div class="rate-info">
+      <div class="rate-item"><div class="rate-val">200</div><div class="rate-lbl">Coins = $15</div></div>
+      <div class="rate-item"><div class="rate-val">$500</div><div class="rate-lbl">Min. Withdraw</div></div>
+      <div class="rate-item"><div class="rate-val" id="rateEarned">$0</div><div class="rate-lbl">Earned</div></div>
+    </div>
+    <button class="withdraw-full-btn" id="withdrawBtn" onclick="withdraw()" disabled>🏦 Withdraw $500</button>
+    <div class="withdraw-note" id="withdrawNote">Keep watching to earn more coins!</div>
+  </div>
+</div>
+
+<!-- UPLOAD MODAL -->
+<div class="modal-overlay" id="uploadOverlay" onclick="closeOutside(event,'uploadOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <button class="close-modal" onclick="closeUpload()">×</button>
+    <div class="modal-title">📤 Upload Video</div>
+    <input type="file" id="fileInput" accept="video/*" onchange="handleFile(event)">
+    <div class="drop-zone" onclick="document.getElementById('fileInput').click()">
+      <div class="drop-icon" id="dropIcon">🎬</div>
+      <div class="drop-title" id="dropTitle">Tap to Choose Video</div>
+      <div class="drop-sub" id="dropSub">MP4, MOV · max 50MB</div>
+    </div>
+    <div class="upload-progress" id="uploadProgress">
+      <div class="upload-progress-fill" id="uploadProgressFill"></div>
+    </div>
+    <textarea class="caption-input" id="captionInput" placeholder="Add a caption... #tags" rows="2"></textarea>
+    <button class="post-btn" id="postBtn" onclick="postVideo()" disabled>Post Video 🚀</button>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://cqcrkcbcbezrazmgimmg.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_Gw4NarmcXCrCnX7P_MmPRw_xLIN9qvD';
+  const { createClient } = supabase;
+  const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const THRESHOLD = 6667;
+  let totalCoins = 0;
+  let currentUser = null;
+  let currentUserName = '';
+  let watched = new Set();
+  let timers = {};
+  let pendingFile = null;
+  let authMode = 'login';
+
+  // ── AUTH ──
+  function switchTab(mode) {
+    authMode = mode;
+    document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active', (mode==='login'?i===0:i===1)));
+    document.getElementById('authBtn').textContent = mode==='login'?'Login':'Sign Up';
+    document.getElementById('authName').classList.toggle('auth-hidden', mode==='login');
+    document.getElementById('authError').textContent='';
+  }
+
+  async function doAuth() {
+    const email = document.getElementById('authEmail').value.trim();
+    const pass = document.getElementById('authPass').value;
+    const name = document.getElementById('authName').value.trim();
+    const btn = document.getElementById('authBtn');
+    const err = document.getElementById('authError');
+    if(!email||!pass){ err.textContent='Please fill in all fields.'; return; }
+    if(authMode==='signup'&&!name){ err.textContent='Please enter a username.'; return; }
+    btn.disabled=true; btn.textContent='Please wait...'; err.textContent='';
+    try {
+      if(authMode==='signup'){
+        const {data,error} = await sb.auth.signUp({email,password:pass,options:{data:{user_name:name}}});
+        if(error) throw error;
+        err.style.color='var(--accent)';
+        err.textContent='Account created! Logging you in...';
+        await sb.auth.signInWithPassword({email,password:pass});
+      } else {
+        const {data,error} = await sb.auth.signInWithPassword({email,password:pass});
+        if(error) throw error;
+      }
+    } catch(e) {
+      err.style.color='var(--danger)';
+      err.textContent = e.message||'Something went wrong.';
+      btn.disabled=false; btn.textContent=authMode==='login'?'Login':'Sign Up';
+    }
+  }
+
+  async function logout() {
+    await sb.auth.signOut();
+    location.reload();
+  }
+
+  // ── SESSION ──
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if(session?.user){
+      currentUser = session.user;
+      currentUserName = session.user.user_metadata?.user_name || session.user.email.split('@')[0];
+      document.getElementById('authScreen').style.display='none';
+      loadFeed();
+    }
+  });
+
+  // ── COINS ──
+  function updateCoins(animate) {
+    const el = document.getElementById('coinCount');
+    el.textContent = totalCoins.toLocaleString();
+    if(animate){ el.classList.add('bump'); setTimeout(()=>el.classList.remove('bump'),300); }
+    const ok = totalCoins>=THRESHOLD;
+    document.getElementById('withdrawBtn').disabled=!ok;
+    const usd=((totalCoins/200)*15).toFixed(2);
+    document.getElementById('modalCoins').textContent=totalCoins.toLocaleString();
+    document.getElementById('modalUsd').textContent=`≈ $${usd} USD`;
+    document.getElementById('rateEarned').textContent='$'+usd;
+    document.getElementById('progressFill').style.width=Math.min(100,(totalCoins/THRESHOLD)*100)+'%';
+    document.getElementById('progressLabel').textContent=`${totalCoins.toLocaleString()} / ${THRESHOLD.toLocaleString()}`;
+    if(ok){
+      document.getElementById('progressMilestone').textContent='🎉 Withdrawal Unlocked!';
+      document.getElementById('progressMilestone').style.color='var(--gold)';
+      document.getElementById('withdrawNote').textContent="You've reached $500! Cash out now 🎉";
+    } else {
+      document.getElementById('progressMilestone').textContent=`💰 $${(((THRESHOLD-totalCoins)/200)*15).toFixed(2)} more to unlock`;
+      document.getElementById('progressMilestone').style.color='var(--accent)';
+      document.getElementById('withdrawNote').textContent='Keep watching to earn more coins!';
+    }
+  }
+
+  function floatCoin(x,y){
+    const e=document.createElement('div'); e.className='float-coin'; e.textContent='🪙';
+    e.style.left=(x-11)+'px'; e.style.top=(y-11)+'px';
+    document.body.appendChild(e); setTimeout(()=>e.remove(),1200);
+  }
+
+  function award(id,coins,rect){
+    if(watched.has(id))return;
+    watched.add(id); totalCoins+=coins; updateCoins(true);
+    const t=document.getElementById('toast-'+id);
+    if(t){t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+    for(let i=0;i<3;i++) setTimeout(()=>floatCoin(rect.left+Math.random()*rect.width,rect.top+Math.random()*rect.height*.5),i*200);
+  }
+
+  // ── FEED ──
+  async function loadFeed() {
+    const feed = document.getElementById('feed');
+    feed.innerHTML = '<div class="center-state"><div class="spinner"></div><div class="state-sub">Loading videos...</div></div>';
+    const {data,error} = await sb.from('videos').select('*').order('created_at',{ascending:false});
+    feed.innerHTML='';
+    if(error||!data||data.length===0){
+      feed.innerHTML=`<div class="center-state">
+        <div class="state-icon">🎬</div>
+        <div class="state-title">No Videos Yet</div>
+        <div class="state-sub">Be the first to upload a video and start earning!</div>
+        <button class="upload-big-btn" onclick="openUpload()">📤 Upload First Video</button>
+      </div>`;
+      return;
+    }
+    data.forEach(v=>{ const card=makeCard(v); feed.appendChild(card); observer.observe(card); });
+  }
+
+  function makeCard(v){
+    const coins=v.coins||10;
+    const c=document.createElement('div');
+    c.className='video-card'; c.dataset.id=v.id; c.dataset.coins=coins;
+    c.innerHTML=`
+      <video src="${v.file_url}" loop playsinline preload="metadata"></video>
+      <div class="tap-overlay" onclick="togglePlay('${v.id}')"></div>
+      <div class="pause-flash" id="flash-${v.id}">⏸</div>
+      <div class="earn-badge">+${coins} 🪙 per view</div>
+      <div class="coin-toast" id="toast-${v.id}">+${coins} 🪙 Coins Earned!</div>
+      <div class="video-info">
+        <div class="username">@${v.user_name}</div>
+        <div class="caption">${v.caption||''} <span style="color:var(--accent)">#vidcoin</span></div>
+      </div>
+      <div class="actions">
+        <div class="action-btn"><div class="action-icon">❤️</div><span class="action-label">Like</span></div>
+        <div class="action-btn"><div class="action-icon">💬</div><span class="action-label">Comment</span></div>
+        <div class="action-btn"><div class="action-icon">↗️</div><span class="action-label">Share</span></div>
+      </div>
+      <div class="watch-bar" id="bar-${v.id}"></div>`;
+    return c;
+  }
+
+  function togglePlay(id){
+    const card=document.querySelector(`[data-id="${id}"]`); if(!card)return;
+    const v=card.querySelector('video'), f=document.getElementById('flash-'+id);
+    if(v.paused){v.play();f.textContent='▶';}else{v.pause();f.textContent='⏸';}
+    f.classList.remove('hide'); f.classList.add('show');
+    setTimeout(()=>{f.classList.remove('show');f.classList.add('hide');setTimeout(()=>f.classList.remove('hide'),300);},700);
+  }
+
+  const observer = new IntersectionObserver(entries=>{
+    entries.forEach(en=>{
+      const card=en.target, id=card.dataset.id, coins=+card.dataset.coins;
+      const video=card.querySelector('video'), bar=document.getElementById('bar-'+id);
+      if(en.isIntersecting){
+        video&&video.play().catch(()=>{});
+        let p=watched.has(id)?100:0;
+        if(bar) bar.style.width=p+'%';
+        clearInterval(timers[id]);
+        timers[id]=setInterval(()=>{
+          if(video&&video.paused)return;
+          p=Math.min(p+2,100);
+          if(bar) bar.style.width=p+'%';
+          if(p>=100){clearInterval(timers[id]);award(id,coins,card.getBoundingClientRect());}
+        },100);
+      } else {
+        video&&video.pause();
+        clearInterval(timers[id]);
+      }
+    });
+  },{threshold:0.75});
+
+  // ── UPLOAD ──
+  function handleFile(e){ const f=e.target.files[0]; if(f) setReady(f); }
+  function setReady(file){
+    pendingFile=file;
+    document.getElementById('dropIcon').textContent='✅';
+    document.getElementById('dropTitle').textContent=file.name.length>30?file.name.slice(0,30)+'…':file.name;
+    document.getElementById('dropSub').textContent=(file.size/1024/1024).toFixed(1)+' MB — Ready!';
+    document.getElementById('postBtn').disabled=false;
+  }
+
+  async function postVideo(){
+    if(!pendingFile||!currentUser)return;
+    const btn=document.getElementById('postBtn');
+    btn.disabled=true; btn.textContent='Uploading...';
+    document.getElementById('uploadProgress').style.display='block';
+    document.getElementById('uploadProgressFill').style.width='30%';
+    try {
+      const ext=pendingFile.name.split('.').pop();
+      const path=`${currentUser.id}/${Date.now()}.${ext}`;
+      const {data:upData,error:upErr}=await sb.storage.from('Videos').upload(path,pendingFile,{contentType:pendingFile.type,upsert:false});
+      if(upErr)throw upErr;
+      document.getElementById('uploadProgressFill').style.width='70%';
+      const {data:urlData}=sb.storage.from('Videos').getPublicUrl(path);
+      const fileUrl=urlData.publicUrl;
+      const caption=document.getElementById('captionInput').value.trim();
+      const coins=[8,10,12,15,20][Math.floor(Math.random()*5)];
+      const {error:dbErr}=await sb.from('videos').insert({user_name:currentUserName,caption,file_url:fileUrl,coins});
+      if(dbErr)throw dbErr;
+      document.getElementById('uploadProgressFill').style.width='100%';
+      setTimeout(()=>{
+        pendingFile=null;
+        document.getElementById('fileInput').value='';
+        document.getElementById('captionInput').value='';
+        document.getElementById('dropIcon').textContent='🎬';
+        document.getElementById('dropTitle').textContent='Tap to Choose Video';
+        document.getElementById('dropSub').textContent='MP4, MOV · max 50MB';
+        document.getElementById('postBtn').disabled=true;
+        btn.textContent='Post Video 🚀';
+        document.getElementById('uploadProgress').style.display='none';
+        document.getElementById('uploadProgressFill').style.width='0%';
+        closeUpload();
+        loadFeed();
+      },500);
+    } catch(e){
+      alert('Upload failed: '+e.message);
+      btn.disabled=false; btn.textContent='Post Video 🚀';
+      document.getElementById('uploadProgress').style.display='none';
+    }
+  }
+
+  // ── MODALS ──
+  function openWallet(){ updateCoins(false); document.getElementById('walletOverlay').classList.add('open'); }
+  function closeWallet(){ document.getElementById('walletOverlay').classList.remove('open'); }
+  function openUpload(){ document.getElementById('uploadOverlay').classList.add('open'); }
+  function closeUpload(){ document.getElementById('uploadOverlay').classList.remove('open'); }
+  function closeOutside(e,id){ if(e.target.id===id) document.getElementById(id).classList.remove('open'); }
+
+  function withdraw(){
+    if(totalCoins<THRESHOLD)return;
+    alert('🎉 Withdrawal of $500 initiated!\n\nProcessing: 1–3 business days.');
+    totalCoins-=THRESHOLD; watched.clear(); updateCoins(false); closeWallet();
+  }
+</script>
+</body>
+</html>
