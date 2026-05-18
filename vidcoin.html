@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VidCoin</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{--gold:#FFD700;--gold2:#FFA500;--bg:#000;--card:#111;--accent:#00f0a0;--danger:#ff3b5c;--naira:#00c853;--text:#fff;--muted:#888;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+
+  /* SPLASH */
+  .splash{position:fixed;inset:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity 0.5s;}
+  .splash.hide{opacity:0;pointer-events:none;}
+  .splash-logo{font-family:'Bebas Neue',sans-serif;font-size:64px;background:linear-gradient(135deg,var(--gold),var(--gold2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:6px;}
+  .splash-sub{color:var(--muted);font-size:14px;margin-bottom:32px;}
+  .splash-spinner{width:32px;height:32px;border:3px solid rgba(255,215,0,0.2);border-top-color:var(--gold);border-radius:50%;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* TOPBAR */
+  .topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:rgba(0,0,0,0.5);position:absolute;top:0;left:0;right:0;z-index:100;backdrop-filter:blur(10px);}
+  .logo{font-family:'Bebas Neue',sans-serif;font-size:24px;background:linear-gradient(135deg,var(--gold),var(--gold2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:2px;}
+  .top-right{display:flex;gap:10px;align-items:center;}
+  .search-btn{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;}
+  .invite-topbtn{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000;border:none;border-radius:14px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;}
+
+  /* FEED */
+  .feed{flex:1;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch;}
+  .feed::-webkit-scrollbar{display:none;}
+
+  /* VIDEO CARD - FULL TIKTOK STYLE */
+  .video-card{height:100vh;scroll-snap-align:start;position:relative;overflow:hidden;background:#000;}
+  .video-card video{width:100%;height:100%;object-fit:cover;display:block;}
+  .tap-overlay{position:absolute;inset:0;z-index:5;cursor:pointer;}
+  .pause-flash{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(0);z-index:10;font-size:40px;opacity:0;pointer-events:none;transition:all 0.2s;}
+  .pause-flash.show{transform:translate(-50%,-50%) scale(1);opacity:1;}
+  .pause-flash.hide{transform:translate(-50%,-50%) scale(1.3);opacity:0;}
+
+  /* THUMB PLACEHOLDER */
+  .thumb-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a2e,#16213e);z-index:2;}
+  .thumb-placeholder.hidden{display:none;}
+  .play-circle{width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;font-size:24px;backdrop-filter:blur(10px);}
+
+  /* VIDEO LOAD BAR */
+  .vload-bar{position:absolute;bottom:0;left:0;right:0;height:2px;background:rgba(255,255,255,0.15);z-index:15;}
+  .vload-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--gold2));width:0%;transition:width 0.3s;}
+
+  /* BOTTOM INFO - TIKTOK STYLE */
+  .video-info{position:absolute;bottom:80px;left:0;right:90px;padding:0 16px;z-index:10;}
+  .v-user-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .v-avatar{width:40px;height:40px;border-radius:50%;border:2px solid #fff;overflow:hidden;flex-shrink:0;cursor:pointer;background:linear-gradient(135deg,var(--gold),var(--gold2));}
+  .v-avatar img{width:100%;height:100%;object-fit:cover;}
+  .v-avatar-letter{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#000;}
+  .v-username{font-weight:700;font-size:15px;cursor:pointer;}
+  .follow-inline-btn{background:transparent;border:1px solid #fff;color:#fff;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;margin-left:6px;}
+  .follow-inline-btn.following{border-color:var(--muted);color:var(--muted);}
+  .v-caption{font-size:13px;color:#fff;line-height:1.4;margin-bottom:6px;}
+  .v-song{font-size:12px;color:#ddd;display:flex;align-items:center;gap:4px;}
+
+  /* TIKTOK RIGHT ACTIONS */
+  .actions{position:absolute;right:8px;bottom:90px;display:flex;flex-direction:column;align-items:center;gap:20px;z-index:10;}
+  
+  /* AVATAR ACTION (creator) */
+  .creator-avatar-wrap{position:relative;margin-bottom:4px;}
+  .creator-avatar{width:48px;height:48px;border-radius:50%;border:2px solid #fff;overflow:hidden;cursor:pointer;background:linear-gradient(135deg,var(--gold),var(--gold2));}
+  .creator-avatar img{width:100%;height:100%;object-fit:cover;}
+  .creator-avatar-letter{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#000;}
+  .follow-plus{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);background:var(--danger);border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;cursor:pointer;border:2px solid #000;}
+
+  .action-item{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;}
+  .action-icon-wrap{width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-size:32px;transition:transform 0.2s;}
+  .action-icon-wrap:active{transform:scale(0.85);}
+  .action-count{font-size:12px;color:#fff;font-weight:600;text-align:center;}
+
+  /* HEART ANIMATION */
+  .heart-anim{animation:heartPop 0.4s ease;}
+  @keyframes heartPop{0%{transform:scale(1)}50%{transform:scale(1.4)}100%{transform:scale(1)}}
+
+  /* DISC ANIMATION */
+  .disc{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#333,#555);border:4px solid #333;display:flex;align-items:center;justify-content:center;animation:rotate 4s linear infinite;}
+  @keyframes rotate{to{transform:rotate(360deg)}}
+
+  /* BOTTOM NAV - TIKTOK STYLE */
+  .bottom-nav{display:flex;background:rgba(0,0,0,0.95);border-top:1px solid rgba(255,255,255,0.08);padding:8px 0 12px;position:relative;z-index:100;}
+  .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;font-size:10px;color:var(--muted);}
+  .nav-item.active{color:#fff;}
+  .nav-icon{font-size:24px;}
+  .nav-upload{background:linear-gradient(135deg,var(--gold),var(--gold2));border-radius:8px;padding:2px 14px;font-size:24px;color:#000;}
+
+  /* MODALS */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:flex-end;justify-content:center;z-index:300;opacity:0;pointer-events:none;transition:opacity 0.3s;backdrop-filter:blur(4px);}
+  .modal-overlay.open{opacity:1;pointer-events:all;}
+  .modal{background:#111;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;border-top:1px solid rgba(255,255,255,0.1);transform:translateY(100%);transition:transform 0.4s cubic-bezier(0.34,1.2,0.64,1);position:relative;max-height:88vh;overflow-y:auto;}
+  .modal-overlay.open .modal{transform:translateY(0);}
+  .modal-handle{width:36px;height:3px;background:#333;border-radius:2px;margin:0 auto 14px;}
+  .modal-title{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--gold);margin-bottom:14px;letter-spacing:1px;}
+  .close-modal{position:absolute;top:12px;right:14px;background:rgba(255,255,255,0.08);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;}
+
+  /* COMMENTS - TIKTOK STYLE */
+  .comment-list{display:flex;flex-direction:column;gap:14px;margin-bottom:14px;max-height:320px;overflow-y:auto;}
+  .comment-item{display:flex;gap:10px;}
+  .c-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#000;flex-shrink:0;}
+  .c-body{flex:1;}
+  .c-user{font-size:13px;font-weight:700;color:#fff;margin-bottom:2px;}
+  .c-text{font-size:13px;color:#ddd;line-height:1.4;}
+  .c-time{font-size:11px;color:var(--muted);margin-top:3px;}
+  .c-like{font-size:13px;color:var(--muted);margin-top:3px;cursor:pointer;}
+  .comment-input-row{display:flex;gap:8px;align-items:center;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);}
+  .c-input-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#000;flex-shrink:0;}
+  .comment-input{flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:9px 14px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;}
+  .comment-input:focus{border-color:rgba(255,215,0,0.5);}
+  .comment-send{background:none;border:none;color:var(--gold);font-size:20px;cursor:pointer;padding:4px;}
+  .no-comments{text-align:center;color:var(--muted);font-size:13px;padding:24px;}
+
+  /* PROFILE - TIKTOK STYLE */
+  .profile-page{position:fixed;inset:0;background:#000;z-index:250;transform:translateX(100%);transition:transform 0.3s;overflow-y:auto;}
+  .profile-page.open{transform:translateX(0);}
+  .profile-topbar{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.08);}
+  .profile-back{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;}
+  .profile-handle{font-weight:700;font-size:16px;}
+  .profile-hero{padding:20px 16px;display:flex;flex-direction:column;align-items:center;gap:12px;}
+  .profile-pic-big{width:88px;height:88px;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.2);background:linear-gradient(135deg,var(--gold),var(--gold2));position:relative;cursor:pointer;}
+  .profile-pic-big img{width:100%;height:100%;object-fit:cover;}
+  .profile-pic-letter{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:#000;}
+  .profile-pic-edit{position:absolute;bottom:0;right:0;background:var(--gold);width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;}
+  .profile-name-big{font-weight:700;font-size:18px;}
+  .profile-stats-row{display:flex;gap:32px;}
+  .profile-stat-item{text-align:center;}
+  .profile-stat-num{font-weight:700;font-size:18px;}
+  .profile-stat-lbl{font-size:12px;color:var(--muted);}
+  .profile-follow-btn{background:var(--danger);color:#fff;border:none;border-radius:4px;padding:8px 32px;font-weight:700;font-size:14px;cursor:pointer;width:100%;max-width:200px;}
+  .profile-follow-btn.following{background:transparent;border:1px solid rgba(255,255,255,0.3);color:#fff;}
+  .profile-edit-btn{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:4px;padding:8px 24px;font-weight:700;font-size:14px;cursor:pointer;}
+  .profile-bio{font-size:13px;color:#ddd;text-align:center;padding:0 20px;}
+  .profile-tabs{display:flex;border-bottom:1px solid rgba(255,255,255,0.08);}
+  .profile-tab{flex:1;padding:12px;text-align:center;cursor:pointer;color:var(--muted);font-size:20px;border-bottom:2px solid transparent;}
+  .profile-tab.active{color:#fff;border-bottom-color:#fff;}
+  .profile-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:rgba(255,255,255,0.05);}
+  .profile-thumb{aspect-ratio:9/16;overflow:hidden;position:relative;cursor:pointer;background:#111;}
+  .profile-thumb video{width:100%;height:100%;object-fit:cover;}
+  .profile-thumb-likes{position:absolute;bottom:4px;left:4px;font-size:11px;color:#fff;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,0.8);}
+  .profile-thumb-delete{position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);border:none;color:#fff;border-radius:50%;width:24px;height:24px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+
+  /* SEARCH PAGE */
+  .search-page{position:fixed;inset:0;background:#000;z-index:250;transform:translateX(100%);transition:transform 0.3s;padding:60px 16px 16px;}
+  .search-page.open{transform:translateX(0);}
+  .search-topbar{position:absolute;top:0;left:0;right:0;padding:10px 16px;display:flex;gap:10px;align-items:center;background:#000;border-bottom:1px solid rgba(255,255,255,0.08);}
+  .search-back{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;}
+  .search-bar{flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:9px 16px;color:#fff;font-size:14px;outline:none;}
+  .search-bar:focus{border-color:rgba(255,215,0,0.5);}
+  .search-results{margin-top:8px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;max-height:calc(100vh - 80px);}
+  .search-user{display:flex;align-items:center;gap:12px;padding:10px;border-radius:12px;cursor:pointer;background:rgba(255,255,255,0.04);}
+  .search-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#000;overflow:hidden;flex-shrink:0;}
+  .search-avatar img{width:100%;height:100%;object-fit:cover;}
+  .search-info{flex:1;}
+  .search-name{font-weight:700;font-size:14px;}
+  .search-videos{font-size:12px;color:var(--muted);}
+
+  /* USERNAME SETUP */
+  .setup-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.9);display:flex;align-items:flex-end;justify-content:center;z-index:400;}
+  .setup-modal{background:#111;border-radius:20px 20px 0 0;padding:28px 24px;width:100%;max-width:480px;border-top:1px solid rgba(255,215,0,0.2);}
+  .setup-title{font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--gold);margin-bottom:6px;}
+  .setup-sub{color:var(--muted);font-size:13px;margin-bottom:18px;}
+  .setup-input{width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:12px;padding:13px 16px;color:#fff;font-family:'DM Sans',sans-serif;font-size:15px;outline:none;margin-bottom:10px;}
+  .setup-input:focus{border-color:rgba(255,215,0,0.5);}
+  .setup-btn{width:100%;padding:13px;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000;font-weight:700;font-size:15px;border:none;border-radius:12px;cursor:pointer;}
+  .setup-error{color:var(--danger);font-size:12px;margin-top:6px;}
+
+  /* UPLOAD MODAL */
+  .drop-zone{border:2px dashed rgba(255,215,0,0.3);border-radius:14px;padding:28px 20px;text-align:center;cursor:pointer;margin-bottom:12px;}
+  .drop-zone:hover{border-color:var(--gold);background:rgba(255,215,0,0.04);}
+  .drop-icon{font-size:40px;margin-bottom:6px;}
+  .drop-title{font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--gold);margin-bottom:3px;}
+  .drop-sub{color:var(--muted);font-size:12px;}
+  .caption-input{width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:10px 14px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;margin-bottom:10px;outline:none;resize:none;}
+  .caption-input:focus{border-color:rgba(255,215,0,0.4);}
+  .post-btn{width:100%;padding:13px;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000;font-weight:700;font-size:14px;border:none;border-radius:12px;cursor:pointer;}
+  .post-btn:disabled{opacity:0.4;cursor:not-allowed;}
+  #fileInput{display:none;}
+  #avatarInput{display:none;}
+  .upload-prog{background:rgba(255,255,255,0.06);border-radius:8px;height:6px;overflow:hidden;margin-bottom:10px;display:none;}
+  .upload-prog-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--gold2));border-radius:8px;transition:width 0.3s;width:0%;}
+
+  /* INVITE MODAL */
+  .invite-hero{background:linear-gradient(135deg,rgba(0,200,83,0.15),rgba(255,215,0,0.08));border:1px solid rgba(0,200,83,0.3);border-radius:14px;padding:16px;margin-bottom:14px;text-align:center;}
+  .invite-naira{font-family:'Bebas Neue',sans-serif;font-size:48px;color:var(--naira);line-height:1;}
+  .invite-rule{background:rgba(255,255,255,0.03);border-radius:10px;padding:12px;margin-bottom:12px;}
+  .invite-rule-title{font-weight:700;font-size:13px;color:var(--gold);margin-bottom:8px;}
+  .invite-step{display:flex;align-items:flex-start;gap:8px;margin-bottom:7px;font-size:12px;color:#ddd;}
+  .step-dot{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000;font-weight:700;font-size:10px;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+  .invite-code-box{background:rgba(255,215,0,0.06);border:1px dashed rgba(255,215,0,0.4);border-radius:12px;padding:14px;text-align:center;margin-bottom:12px;}
+  .invite-code{font-family:'Bebas Neue',sans-serif;font-size:32px;color:var(--gold);letter-spacing:4px;margin:4px 0;}
+  .invite-code-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
+  .copy-btn{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000;border:none;border-radius:10px;padding:11px;font-weight:700;font-size:13px;cursor:pointer;width:100%;margin-bottom:7px;}
+  .share-btn{background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:11px;font-weight:700;font-size:13px;cursor:pointer;width:100%;margin-bottom:12px;}
+  .invite-prog-track{background:#222;border-radius:8px;height:10px;overflow:hidden;margin-bottom:4px;}
+  .invite-prog-fill{height:100%;background:linear-gradient(90deg,var(--naira),var(--accent));border-radius:8px;transition:width 0.5s;}
+  .invite-earnings{background:rgba(0,200,83,0.08);border:1px solid rgba(0,200,83,0.25);border-radius:10px;padding:12px;text-align:center;}
+  .invite-earn-val{font-family:'Bebas Neue',sans-serif;font-size:32px;color:var(--naira);}
+
+  /* TOAST */
+  .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(50px);background:rgba(20,20,20,0.95);color:#fff;border-radius:18px;padding:9px 18px;font-size:13px;font-weight:600;z-index:999;transition:transform 0.3s;white-space:nowrap;border:1px solid rgba(255,255,255,0.12);pointer-events:none;opacity:0;}
+  .toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+
+  /* FLOAT HEART */
+  .float-heart{position:fixed;pointer-events:none;z-index:999;animation:floatUp 1s ease-out forwards;font-size:28px;}
+  @keyframes floatUp{0%{transform:translateY(0) scale(1);opacity:1}100%{transform:translateY(-100px) scale(0.5);opacity:0}}
+
+  .empty-state{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:30px;scroll-snap-align:start;}
+  .empty-icon{font-size:60px;}
+  .empty-title{font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--gold);}
+  .empty-sub{color:var(--muted);font-size:13px;max-width:240px;line-height:1.5;}
+  .empty-btn{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000;font-weight:700;border:none;border-radius:16px;padding:12px 24px;cursor:pointer;font-size:14px;}
+</style>
+</head>
+<body>
+
+<!-- SPLASH -->
+<div class="splash" id="splash">
+  <div class="splash-logo">VidCoin</div>
+  <div class="splash-sub">Watch. Like. Follow. Earn. 🔥</div>
+  <div class="splash-spinner"></div>
+</div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">VidCoin</div>
+  <div class="top-right">
+    <button class="search-btn" onclick="openSearch()">🔍</button>
+    <button class="invite-topbtn" onclick="openModal('inviteOverlay')">💰 Earn</button>
+  </div>
+</div>
+
+<!-- FEED -->
+<div class="feed" id="feed"></div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+  <div class="nav-item active" id="nav-home" onclick="showHome()"><span class="nav-icon">🏠</span>Home</div>
+  <div class="nav-item" id="nav-search" onclick="openSearch()"><span class="nav-icon">🔍</span>Search</div>
+  <div class="nav-item" onclick="checkUserThenUpload()"><span class="nav-upload">＋</span></div>
+  <div class="nav-item" id="nav-board" onclick="openModal('leaderboardOverlay')"><span class="nav-icon">🏆</span>Board</div>
+  <div class="nav-item" id="nav-profile" onclick="openMyProfile()"><span class="nav-icon">👤</span>Me</div>
+</div>
+
+<!-- SEARCH PAGE -->
+<div class="search-page" id="searchPage">
+  <div class="search-topbar">
+    <button class="search-back" onclick="closeSearch()">←</button>
+    <input class="search-bar" id="searchInput" placeholder="Search users..." oninput="searchUsers(this.value)">
+  </div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+
+<!-- PROFILE PAGE -->
+<div class="profile-page" id="profilePage">
+  <div class="profile-topbar">
+    <button class="profile-back" onclick="closeProfile()">←</button>
+    <div class="profile-handle" id="profileHandle">@user</div>
+  </div>
+  <div class="profile-hero">
+    <div class="profile-pic-big" id="profilePicBig" onclick="editProfilePic()">
+      <div class="profile-pic-letter" id="profilePicLetter">U</div>
+      <div class="profile-pic-edit" id="profilePicEdit" style="display:none">📷</div>
+    </div>
+    <div class="profile-name-big" id="profileNameBig">@username</div>
+    <div class="profile-stats-row">
+      <div class="profile-stat-item"><div class="profile-stat-num" id="profileFollowing">0</div><div class="profile-stat-lbl">Following</div></div>
+      <div class="profile-stat-item"><div class="profile-stat-num" id="profileFollowers">0</div><div class="profile-stat-lbl">Followers</div></div>
+      <div class="profile-stat-item"><div class="profile-stat-num" id="profileLikesTotal">0</div><div class="profile-stat-lbl">Likes</div></div>
+    </div>
+    <div id="profileActionBtn"></div>
+    <div class="profile-bio" id="profileBio"></div>
+  </div>
+  <div class="profile-tabs">
+    <div class="profile-tab active" id="tab-videos" onclick="switchProfileTab('videos')">▦</div>
+    <div class="profile-tab" id="tab-liked" onclick="switchProfileTab('liked')">🤍</div>
+  </div>
+  <div class="profile-grid" id="profileGrid"></div>
+  <input type="file" id="avatarInput" accept="image/*" onchange="uploadAvatar(event)">
+</div>
+
+<!-- COMMENTS MODAL -->
+<div class="modal-overlay" id="commentsOverlay" onclick="closeOutside(event,'commentsOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <button class="close-modal" onclick="closeModal('commentsOverlay')">×</button>
+    <div class="modal-title">💬 <span id="commentCount">0</span> Comments</div>
+    <div class="comment-list" id="commentList"></div>
+    <div class="comment-input-row">
+      <div class="c-input-avatar" id="commentInputAvatar">U</div>
+      <input class="comment-input" id="commentInput" placeholder="Add a comment...">
+      <button class="comment-send" onclick="postComment()">➤</button>
+    </div>
+  </div>
+</div>
+
+<!-- LEADERBOARD MODAL -->
+<div class="modal-overlay" id="leaderboardOverlay" onclick="closeOutside(event,'leaderboardOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <button class="close-modal" onclick="closeModal('leaderboardOverlay')">×</button>
+    <div class="modal-title">🏆 Leaderboard</div>
+    <div id="leaderboardList"></div>
+  </div>
+</div>
+
+<!-- INVITE MODAL -->
+<div class="modal-overlay" id="inviteOverlay" onclick="closeOutside(event,'inviteOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <button class="close-modal" onclick="closeModal('inviteOverlay')">×</button>
+    <div class="modal-title">💰 Invite & Earn</div>
+    <div class="invite-hero">
+      <div class="invite-naira">₦1,500</div>
+      <div style="font-size:12px;color:#ddd;margin-top:4px;">For every 20 friends who use VidCoin 48hrs!</div>
+    </div>
+    <div class="invite-rule">
+      <div class="invite-rule-title">How it works 👇</div>
+      <div class="invite-step"><div class="step-dot">1</div><span>Share your invite code with friends</span></div>
+      <div class="invite-step"><div class="step-dot">2</div><span>Friend opens VidCoin with your code</span></div>
+      <div class="invite-step"><div class="step-dot">3</div><span>They watch for 48 hours</span></div>
+      <div class="invite-step"><div class="step-dot">4</div><span>20 friends = <strong style="color:var(--naira)">₦1,500!</strong></span></div>
+    </div>
+    <div class="invite-code-box">
+      <div class="invite-code-lbl">Your Invite Code</div>
+      <div class="invite-code" id="myInviteCode">------</div>
+    </div>
+    <button class="copy-btn" onclick="copyCode()">📋 Copy Code</button>
+    <button class="share-btn" onclick="shareLink()">↗️ Share Link</button>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px;">
+      <span>Progress</span><span id="inviteProgressText">0 / 20</span>
+    </div>
+    <div class="invite-prog-track"><div class="invite-prog-fill" id="inviteProgFill" style="width:0%"></div></div>
+    <div style="margin:10px 0;"></div>
+    <div class="invite-earnings">
+      <div class="invite-earn-val" id="totalEarnings">₦0</div>
+      <div style="font-size:11px;color:var(--muted);">Total Earned</div>
+    </div>
+  </div>
+</div>
+
+<!-- UPLOAD MODAL -->
+<div class="modal-overlay" id="uploadOverlay" onclick="closeOutside(event,'uploadOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <button class="close-modal" onclick="closeModal('uploadOverlay')">×</button>
+    <div class="modal-title">📤 Upload Video</div>
+    <input type="file" id="fileInput" accept="video/*" onchange="handleFile(event)">
+    <div class="drop-zone" onclick="document.getElementById('fileInput').click()">
+      <div class="drop-icon" id="dropIcon">🎬</div>
+      <div class="drop-title" id="dropTitle">Tap to Choose Video</div>
+      <div class="drop-sub" id="dropSub">MP4, MOV · max 50MB</div>
+    </div>
+    <div class="upload-prog" id="uploadProg"><div class="upload-prog-fill" id="uploadProgFill"></div></div>
+    <textarea class="caption-input" id="captionInput" placeholder="Add a caption... #tags" rows="2"></textarea>
+    <button class="post-btn" id="postBtn" onclick="postVideo()" disabled>Post Video 🚀</button>
+  </div>
+</div>
+
+<!-- USERNAME SETUP -->
+<div class="setup-overlay" id="setupOverlay" style="display:none;">
+  <div class="setup-modal">
+    <div class="setup-title">Pick a Username</div>
+    <div class="setup-sub">Needed to upload & comment. Quick! 😄</div>
+    <input class="setup-input" id="setupInput" type="text" placeholder="e.g. coolkid99" maxlength="20">
+    <input class="setup-input" id="setupInviteInput" type="text" placeholder="Invite code (optional)">
+    <button class="setup-btn" onclick="saveUsername()">Let's Go 🚀</button>
+    <div class="setup-error" id="setupError"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SB_URL='https://cqcrkcbcbezrazmgimmg.supabase.co';
+const SB_KEY='sb_publishable_Gw4NarmcXCrCnX7P_MmPRw_xLIN9qvD';
+const {createClient}=supabase;
+const sb=createClient(SB_URL,SB_KEY);
+
+let me=localStorage.getItem('vc_username')||null;
+let myCode=localStorage.getItem('vc_invite_code')||null;
+let inviteCount=parseInt(localStorage.getItem('vc_invite_count')||'0');
+let myLikes=JSON.parse(localStorage.getItem('vc_likes')||'[]');
+let myFollowing=JSON.parse(localStorage.getItem('vc_following')||'[]');
+let myAvatarUrl=localStorage.getItem('vc_avatar')||null;
+let allVideos=[];
+let loadedCount=0;
+let currentCommentVideoId=null;
+let pendingAction=null;
+let viewingProfile=null;
+let pendingFile=null;
+
+function genCode(s){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let r=(s||'VC').substring(0,2).toUpperCase();for(let i=0;i<5;i++)r+=c[Math.floor(Math.random()*c.length)];return r;}
+
+window.addEventListener('load',async()=>{
+  if(!myCode){myCode=genCode(me||'VC');localStorage.setItem('vc_invite_code',myCode);}
+  const inv=new URLSearchParams(location.search).get('invite');
+  if(inv&&!localStorage.getItem('vc_used_invite')){localStorage.setItem('vc_used_invite','1');}
+  await loadFeed();
+  hideSplash();
+});
+
+function hideSplash(){const s=document.getElementById('splash');s.classList.add('hide');setTimeout(()=>s.style.display='none',500);}
+
+// ── FEED ──
+async function loadFeed(){
+  const feed=document.getElementById('feed');
+  feed.innerHTML='';
+  const {data}=await sb.from('videos').select('id,user_name,caption,file_url,likes,comment_count').order('created_at',{ascending:false});
+  allVideos=data||[];
+  if(!allVideos.length){
+    feed.innerHTML=`<div class="empty-state"><div class="empty-icon">🎬</div><div class="empty-title">No Videos Yet</div><div class="empty-sub">Be the first to upload!</div><button class="empty-btn" onclick="checkUserThenUpload()">📤 Upload First Video</button></div>`;
+    return;
+  }
+  loadedCount=0;loadBatch();
+}
+
+function loadBatch(){
+  const feed=document.getElementById('feed');
+  const end=Math.min(loadedCount+1,allVideos.length);
+  for(let i=loadedCount;i<end;i++){
+    const card=makeCard(allVideos[i]);
+    feed.appendChild(card);
+    lazyObs.observe(card);
+    playObs.observe(card);
+  }
+  loadedCount=end;
+  const old=feed.querySelector('.sentinel');if(old)old.remove();
+  if(loadedCount<allVideos.length){
+    const s=document.createElement('div');s.className='sentinel';s.style.height='1px';
+    feed.appendChild(s);sentinelObs.observe(s);
+  }
+}
+
+const sentinelObs=new IntersectionObserver(entries=>{
+  entries.forEach(en=>{if(en.isIntersecting){sentinelObs.unobserve(en.target);loadBatch();}});
+},{threshold:0.1,rootMargin:'200px'});
+
+const lazyObs=new IntersectionObserver(entries=>{
+  entries.forEach(en=>{
+    const card=en.target,video=card.querySelector('video'),ph=card.querySelector('.thumb-placeholder');
+    if(!video)return;
+    if(en.isIntersecting&&!video.src&&video.dataset.src){
+      video.src=video.dataset.src;video.load();
+      video.addEventListener('canplay',()=>{if(ph)ph.classList.add('hidden');},{once:true});
+    }
+  });
+},{threshold:0,rootMargin:'100% 0px'});
+
+const playObs=new IntersectionObserver(entries=>{
+  entries.forEach(en=>{
+    const video=en.target.querySelector('video');if(!video)return;
+    if(en.isIntersecting)video.play().catch(()=>{});else video.pause();
+  });
+},{threshold:0.75});
+
+function makeCard(v){
+  const liked=myLikes.includes(v.id);
+  const isMe=me&&v.user_name===me;
+  const isFollowing=myFollowing.includes(v.user_name);
+  const c=document.createElement('div');
+  c.className='video-card';c.dataset.id=v.id;
+
+  // avatar html
+  const avatarHtml=myAvatarUrl&&isMe
+    ?`<img src="${myAvatarUrl}" alt="">`
+    :`<div class="creator-avatar-letter">${v.user_name.charAt(0).toUpperCase()}</div>`;
+
+  const infoAvatarHtml=myAvatarUrl&&isMe
+    ?`<img src="${myAvatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover;">`
+    :`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#000;">${v.user_name.charAt(0).toUpperCase()}</div>`;
+
+  c.innerHTML=`
+    <div class="vload-bar"><div class="vload-fill"></div></div>
+    <div class="thumb-placeholder"><div class="play-circle">▶</div></div>
+    <video data-src="${v.file_url}" loop playsinline preload="none"></video>
+    <div class="tap-overlay" onclick="togglePlay('${v.id}')"></div>
+    <div class="pause-flash" id="flash-${v.id}">⏸</div>
+
+    <!-- BOTTOM INFO -->
+    <div class="video-info">
+      <div class="v-user-row">
+        <div class="v-avatar" onclick="openProfile('${v.user_name}')">${infoAvatarHtml}</div>
+        <span class="v-username" onclick="openProfile('${v.user_name}')">@${v.user_name}</span>
+        ${!isMe?`<button class="follow-inline-btn ${isFollowing?'following':''}" id="follow-inline-${v.id}" onclick="toggleFollow('${v.user_name}','${v.id}')">${isFollowing?'Following':'Follow'}</button>`:''}
+      </div>
+      <div class="v-caption">${v.caption||''} <span style="color:var(--accent)">#vidcoin</span></div>
+      <div class="v-song">🎵 VidCoin Original</div>
+    </div>
+
+    <!-- RIGHT ACTIONS - TIKTOK STYLE -->
+    <div class="actions">
+      <!-- Creator avatar -->
+      <div class="creator-avatar-wrap">
+        <div class="creator-avatar" onclick="openProfile('${v.user_name}')">${avatarHtml}</div>
+        ${!isMe?`<div class="follow-plus" onclick="toggleFollow('${v.user_name}','${v.id}')">+</div>`:''}
+      </div>
+
+      <!-- Like -->
+      <div class="action-item" onclick="toggleLike('${v.id}')">
+        <div class="action-icon-wrap" id="heart-${v.id}" style="color:${liked?'#ff3b5c':'#fff'}">${liked?'❤️':'🤍'}</div>
+        <div class="action-count" id="lc-${v.id}">${formatNum(v.likes||0)}</div>
+      </div>
+
+      <!-- Comment -->
+      <div class="action-item" onclick="checkUserThenComment('${v.id}',${v.comment_count||0})">
+        <div class="action-icon-wrap">💬</div>
+        <div class="action-count" id="cm-${v.id}">${formatNum(v.comment_count||0)}</div>
+      </div>
+
+      <!-- Share -->
+      <div class="action-item" onclick="shareApp()">
+        <div class="action-icon-wrap">↗️</div>
+        <div class="action-count">Share</div>
+      </div>
+
+      <!-- Music disc -->
+      <div class="action-item">
+        <div class="disc">🎵</div>
+      </div>
+    </div>`;
+  return c;
+}
+
+function showHome(){loadFeed();setNav('nav-home');}
+function formatNum(n){if(n>=1000)return (n/1000).toFixed(1)+'K';return n;}
+
+function togglePlay(id){
+  const card=document.querySelector(`[data-id="${id}"]`);if(!card)return;
+  const v=card.querySelector('video'),f=document.getElementById('flash-'+id);
+  if(v.paused){v.play();f.textContent='▶';}else{v.pause();f.textContent='⏸';}
+  f.classList.remove('hide');f.classList.add('show');
+  setTimeout(()=>{f.classList.remove('show');f.classList.add('hide');setTimeout(()=>f.classList.remove('hide'),300);},700);
+}
+
+// ── LIKES ──
+async function toggleLike(id){
+  const heartEl=document.getElementById('heart-'+id);
+  const countEl=document.getElementById('lc-'+id);
+  const liked=myLikes.includes(id);
+  if(liked){
+    myLikes=myLikes.filter(l=>l!==id);
+    heartEl.textContent='🤍';heartEl.style.color='#fff';
+    const n=Math.max(0,(parseInt(countEl.textContent)||1)-1);
+    countEl.textContent=formatNum(n);
+    await sb.from('videos').update({likes:n}).eq('id',id);
+  }else{
+    myLikes.push(id);
+    heartEl.textContent='❤️';heartEl.style.color='#ff3b5c';
+    heartEl.classList.add('heart-anim');setTimeout(()=>heartEl.classList.remove('heart-anim'),400);
+    const n=(parseInt(countEl.textContent?.replace('K','000'))||0)+1;
+    countEl.textContent=formatNum(n);
+    await sb.from('videos').update({likes:n}).eq('id',id);
+    // float heart
+    const rect=heartEl.getBoundingClientRect();
+    const e=document.createElement('div');e.className='float-heart';e.textContent='❤️';
+    e.style.left=rect.left+'px';e.style.top=rect.top+'px';
+    document.body.appendChild(e);setTimeout(()=>e.remove(),1000);
+  }
+  localStorage.setItem('vc_likes',JSON.stringify(myLikes));
+}
+
+// ── FOLLOW ──
+async function toggleFollow(username,cardId){
+  if(!me){pendingAction='follow';openSetup();return;}
+  const isFollowing=myFollowing.includes(username);
+  const inlineBtn=document.getElementById('follow-inline-'+cardId);
+  if(isFollowing){
+    myFollowing=myFollowing.filter(f=>f!==username);
+    if(inlineBtn){inlineBtn.textContent='Follow';inlineBtn.classList.remove('following');}
+    await sb.from('follows').delete().eq('follower',me).eq('following',username);
+  }else{
+    myFollowing.push(username);
+    if(inlineBtn){inlineBtn.textContent='Following';inlineBtn.classList.add('following');}
+    await sb.from('follows').insert({follower:me,following:username});
+    showToast('✅ Following @'+username);
+  }
+  localStorage.setItem('vc_following',JSON.stringify(myFollowing));
+}
+
+// ── COMMENTS ──
+function checkUserThenComment(id,count){
+  if(!me){pendingAction='comment:'+id;openSetup();return;}
+  openComments(id,count);
+}
+
+async function openComments(videoId,count){
+  currentCommentVideoId=videoId;
+  document.getElementById('commentCount').textContent=count||0;
+  document.getElementById('commentInputAvatar').textContent=me?me.charAt(0).toUpperCase():'U';
+  openModal('commentsOverlay');
+  const list=document.getElementById('commentList');
+  list.innerHTML='<div class="no-comments" style="display:flex;justify-content:center"><div class="splash-spinner"></div></div>';
+  const {data}=await sb.from('comments').select('*').eq('video_id',videoId).order('created_at',{ascending:true});
+  if(!data||!data.length){list.innerHTML='<div class="no-comments">No comments yet. Be first! 💬</div>';return;}
+  list.innerHTML=data.map(c=>`
+    <div class="comment-item">
+      <div class="c-avatar">${c.user_name.charAt(0).toUpperCase()}</div>
+      <div class="c-body">
+        <div class="c-user">@${c.user_name}</div>
+        <div class="c-text">${c.text}</div>
+        <div class="c-time">${timeAgo(c.created_at)}</div>
+      </div>
+    </div>`).join('');
+  list.scrollTop=list.scrollHeight;
+}
+
+async function postComment(){
+  const input=document.getElementById('commentInput');
+  const text=input.value.trim();if(!text||!currentCommentVideoId)return;
+  input.value='';
+  await sb.from('comments').insert({video_id:currentCommentVideoId,user_name:me,text});
+  const cc=document.getElementById('cm-'+currentCommentVideoId);
+  const n=(parseInt(cc?.textContent)||0)+1;
+  if(cc)cc.textContent=formatNum(n);
+  document.getElementById('commentCount').textContent=n;
+  await sb.from('videos').update({comment_count:n}).eq('id',currentCommentVideoId);
+  openComments(currentCommentVideoId,n);
+}
+
+// ── PROFILE ──
+async function openProfile(username){
+  viewingProfile=username;
+  const isMe=username===me;
+  document.getElementById('profileHandle').textContent='@'+username;
+  document.getElementById('profileNameBig').textContent='@'+username;
+  document.getElementById('profilePicLetter').textContent=username.charAt(0).toUpperCase();
+  document.getElementById('profilePicEdit').style.display=isMe?'flex':'none';
+
+  // Set avatar
+  if(isMe&&myAvatarUrl){
+    document.getElementById('profilePicBig').innerHTML=`<img src="${myAvatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"><div class="profile-pic-edit" style="display:flex">📷</div>`;
+    document.getElementById('profilePicBig').onclick=editProfilePic;
+  }
+
+  // Follow/Edit button
+  const actionDiv=document.getElementById('profileActionBtn');
+  if(isMe){
+    actionDiv.innerHTML=`<button class="profile-edit-btn" onclick="showToast('Edit profile coming soon!')">Edit Profile</button>`;
+  }else{
+    const isFollowing=myFollowing.includes(username);
+    actionDiv.innerHTML=`<button class="profile-follow-btn ${isFollowing?'following':''}" id="profile-follow-btn" onclick="profileToggleFollow('${username}')">${isFollowing?'Following':'Follow'}</button>`;
+  }
+
+  document.getElementById('profilePage').classList.add('open');
+
+  // Load stats
+  const [{data:vids},{data:followers},{data:following}]=await Promise.all([
+    sb.from('videos').select('id,file_url,likes').eq('user_name',username),
+    sb.from('follows').select('id').eq('following',username),
+    sb.from('follows').select('id').eq('follower',username)
+  ]);
+  document.getElementById('profileFollowers').textContent=followers?.length||0;
+  document.getElementById('profileFollowing').textContent=following?.length||0;
+  const totalLikes=vids?vids.reduce((s,v)=>s+(v.likes||0),0):0;
+  document.getElementById('profileLikesTotal').textContent=formatNum(totalLikes);
+  renderProfileGrid(vids||[],isMe);
+}
+
+function renderProfileGrid(vids,isMe){
+  const grid=document.getElementById('profileGrid');
+  if(!vids.length){grid.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:24px;font-size:13px">No videos yet</div>';return;}
+  grid.innerHTML=vids.map(v=>`
+    <div class="profile-thumb">
+      <video src="${v.file_url}" muted playsinline preload="metadata"></video>
+      <div class="profile-thumb-likes">❤️ ${formatNum(v.likes||0)}</div>
+      ${isMe?`<button class="profile-thumb-delete" onclick="deleteVideo('${v.id}')">🗑</button>`:''}
+    </div>`).join('');
+}
+
+async function profileToggleFollow(username){
+  if(!me){openSetup();return;}
+  const isFollowing=myFollowing.includes(username);
+  const btn=document.getElementById('profile-follow-btn');
+  if(isFollowing){
+    myFollowing=myFollowing.filter(f=>f!==username);
+    btn.textContent='Follow';btn.classList.remove('following');
+    await sb.from('follows').delete().eq('follower',me).eq('following',username);
+  }else{
+    myFollowing.push(username);
+    btn.textContent='Following';btn.classList.add('following');
+    await sb.from('follows').insert({follower:me,following:username});
+    showToast('✅ Following @'+username);
+  }
+  localStorage.setItem('vc_following',JSON.stringify(myFollowing));
+  const followers=await sb.from('follows').select('id').eq('following',username);
+  document.getElementById('profileFollowers').textContent=followers.data?.length||0;
+}
+
+function openMyProfile(){
+  if(!me){pendingAction='profile';openSetup();return;}
+  openProfile(me);setNav('nav-profile');
+}
+
+function closeProfile(){document.getElementById('profilePage').classList.remove('open');}
+
+function switchProfileTab(tab){
+  document.querySelectorAll('.profile-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+}
+
+// AVATAR
+function editProfilePic(){
+  if(viewingProfile!==me)return;
+  document.getElementById('avatarInput').click();
+}
+
+async function uploadAvatar(e){
+  const file=e.target.files[0];if(!file||!me)return;
+  showToast('Uploading avatar...');
+  const ext=file.name.split('.').pop();
+  const path=`avatars/${me}.${ext}`;
+  const {error}=await sb.storage.from('Videos').upload(path,file,{contentType:file.type,upsert:true});
+  if(error){showToast('❌ '+error.message);return;}
+  const {data}=sb.storage.from('Videos').getPublicUrl(path);
+  myAvatarUrl=data.publicUrl+'?t='+Date.now();
+  localStorage.setItem('vc_avatar',myAvatarUrl);
+  document.getElementById('profilePicBig').innerHTML=`<img src="${myAvatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"><div class="profile-pic-edit" style="display:flex">📷</div>`;
+  showToast('✅ Profile picture updated!');
+}
+
+// DELETE VIDEO
+async function deleteVideo(id){
+  if(!confirm('Delete this video?'))return;
+  await sb.from('videos').delete().eq('id',id);
+  showToast('🗑 Video deleted');
+  closeProfile();
+  loadFeed();
+}
+
+// SEARCH
+function openSearch(){document.getElementById('searchPage').classList.add('open');document.getElementById('searchInput').focus();setNav('nav-search');}
+function closeSearch(){document.getElementById('searchPage').classList.remove('open');}
+
+async function searchUsers(query){
+  const results=document.getElementById('searchResults');
+  if(!query.trim()){results.innerHTML='';return;}
+  const {data}=await sb.from('videos').select('user_name').ilike('user_name','%'+query+'%');
+  if(!data||!data.length){results.innerHTML='<div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">No users found</div>';return;}
+  const unique=[...new Set(data.map(d=>d.user_name))];
+  results.innerHTML=unique.map(u=>`
+    <div class="search-user" onclick="closeSearch();openProfile('${u}')">
+      <div class="search-avatar"><div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#000">${u.charAt(0).toUpperCase()}</div></div>
+      <div class="search-info"><div class="search-name">@${u}</div><div class="search-videos">Tap to view profile</div></div>
+    </div>`).join('');
+}
+
+// LEADERBOARD
+async function openLeaderboard(){
+  openModal('leaderboardOverlay');setNav('nav-board');
+  const {data}=await sb.from('videos').select('user_name,likes');
+  const list=document.getElementById('leaderboardList');
+  if(!data||!data.length){list.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px">No data yet!</div>';return;}
+  const users={};
+  data.forEach(v=>{if(!users[v.user_name])users[v.user_name]={likes:0,videos:0};users[v.user_name].likes+=v.likes||0;users[v.user_name].videos++;});
+  const sorted=Object.entries(users).sort((a,b)=>b[1].likes-a[1].likes).slice(0,10);
+  const medals=['🥇','🥈','🥉'];
+  list.innerHTML=sorted.map(([name,s],i)=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,0.04);border-radius:12px;margin-bottom:8px;cursor:pointer;" onclick="closeModal('leaderboardOverlay');openProfile('${name}')">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;width:28px;text-align:center;color:${i===0?'var(--gold)':i===1?'#C0C0C0':i===2?'#CD7F32':'var(--muted)'}">${medals[i]||i+1}</div>
+      <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#000">${name.charAt(0).toUpperCase()}</div>
+      <div style="flex:1"><div style="font-weight:700;font-size:14px">@${name}</div><div style="font-size:12px;color:var(--muted)">${s.videos} videos</div></div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--accent)">${formatNum(s.likes)} ❤️</div>
+    </div>`).join('');
+}
+
+// USERNAME SETUP
+function openSetup(){document.getElementById('setupOverlay').style.display='flex';}
+function saveUsername(){
+  const val=document.getElementById('setupInput').value.trim();
+  const err=document.getElementById('setupError');
+  if(!val||val.length<2){err.textContent='At least 2 characters';return;}
+  if(!/^[a-zA-Z0-9_]+$/.test(val)){err.textContent='Letters, numbers & underscores only';return;}
+  me=val;myCode=genCode(val);
+  localStorage.setItem('vc_username',val);localStorage.setItem('vc_invite_code',myCode);
+  document.getElementById('setupOverlay').style.display='none';
+  showToast('👋 Welcome, @'+val+'!');
+  if(pendingAction==='upload'){openModal('uploadOverlay');pendingAction=null;}
+  else if(pendingAction?.startsWith('comment:')){const id=pendingAction.split(':')[1];openComments(id,0);pendingAction=null;}
+  else if(pendingAction==='profile'){openProfile(me);pendingAction=null;}
+  else if(pendingAction==='follow'){pendingAction=null;}
+}
+
+// INVITE
+function openInvite(){
+  openModal('inviteOverlay');
+  document.getElementById('myInviteCode').textContent=myCode||'------';
+  const pct=Math.min(100,(inviteCount/20)*100);
+  document.getElementById('inviteProgFill').style.width=pct+'%';
+  document.getElementById('inviteProgressText').textContent=inviteCount+' / 20';
+  document.getElementById('totalEarnings').textContent='₦'+(Math.floor(inviteCount/20)*1500).toLocaleString();
+}
+function copyCode(){navigator.clipboard.writeText(myCode||'').then(()=>showToast('✅ Code copied!')).catch(()=>showToast('Your code: '+myCode));}
+function shareLink(){
+  const url=`https://videos59.github.io/Videos/vidcoin.html?invite=${myCode}`;
+  const text=`🎬 Check out VidCoin! Watch fun videos!\n\nUse my invite code: ${myCode}\n\n${url}`;
+  if(navigator.share)navigator.share({title:'Join VidCoin!',text,url});
+  else navigator.clipboard.writeText(text).then(()=>showToast('✅ Link copied!'));
+}
+function shareApp(){
+  const url='https://videos59.github.io/Videos/vidcoin.html';
+  if(navigator.share)navigator.share({title:'VidCoin!',url});
+  else navigator.clipboard.writeText(url).then(()=>showToast('✅ Link copied!'));
+}
+
+// UPLOAD
+function checkUserThenUpload(){if(!me){pendingAction='upload';openSetup();return;}openModal('uploadOverlay');}
+function handleFile(e){const f=e.target.files[0];if(f)setReady(f);}
+function setReady(file){
+  pendingFile=file;
+  document.getElementById('dropIcon').textContent='✅';
+  document.getElementById('dropTitle').textContent=file.name.length>30?file.name.slice(0,30)+'…':file.name;
+  document.getElementById('dropSub').textContent=(file.size/1024/1024).toFixed(1)+' MB — Ready!';
+  document.getElementById('postBtn').disabled=false;
+}
+async function postVideo(){
+  if(!pendingFile)return;
+  const btn=document.getElementById('postBtn');
+  btn.disabled=true;btn.textContent='Uploading...';
+  document.getElementById('uploadProg').style.display='block';
+  document.getElementById('uploadProgFill').style.width='30%';
+  try{
+    const ext=pendingFile.name.split('.').pop();
+    const path=`${me}/${Date.now()}.${ext}`;
+    const {error:upErr}=await sb.storage.from('Videos').upload(path,pendingFile,{contentType:pendingFile.type});
+    if(upErr)throw upErr;
+    document.getElementById('uploadProgFill').style.width='70%';
+    const {data:urlData}=sb.storage.from('Videos').getPublicUrl(path);
+    const caption=document.getElementById('captionInput').value.trim();
+    const {error:dbErr}=await sb.from('videos').insert({user_name:me,caption,file_url:urlData.publicUrl,likes:0,comment_count:0});
+    if(dbErr)throw dbErr;
+    document.getElementById('uploadProgFill').style.width='100%';
+    setTimeout(()=>{
+      pendingFile=null;document.getElementById('fileInput').value='';
+      document.getElementById('captionInput').value='';
+      document.getElementById('dropIcon').textContent='🎬';
+      document.getElementById('dropTitle').textContent='Tap to Choose Video';
+      document.getElementById('dropSub').textContent='MP4, MOV · max 50MB';
+      document.getElementById('postBtn').disabled=true;btn.textContent='Post Video 🚀';
+      document.getElementById('uploadProg').style.display='none';
+      document.getElementById('uploadProgFill').style.width='0%';
+      closeModal('uploadOverlay');loadFeed();showToast('🎉 Video posted!');
+    },500);
+  }catch(e){showToast('❌ '+e.message);btn.disabled=false;btn.textContent='Post Video 🚀';document.getElementById('uploadProg').style.display='none';}
+}
+
+// UTILS
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function closeOutside(e,id){if(e.target.id===id)closeModal(id);}
+function setNav(id){document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));document.getElementById(id)?.classList.add('active');}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
+function timeAgo(ts){const d=Date.now()-new Date(ts).getTime(),m=Math.floor(d/60000);if(m<1)return 'just now';if(m<60)return m+'m ago';if(m<1440)return Math.floor(m/60)+'h ago';return Math.floor(m/1440)+'d ago';}
+</script>
+</body>
+</html>
